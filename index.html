@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ночной экспресс</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'><rect width='80' height='80' rx='18' fill='%230d0a06'/><rect x='14' y='18' width='52' height='38' rx='6' fill='none' stroke='%23c89040' stroke-width='2' opacity='0.7'/><rect x='20' y='26' width='16' height='20' rx='2' fill='%23f5c060' opacity='0.55'/><rect x='44' y='26' width='16' height='20' rx='2' fill='%23f5c060' opacity='0.35'/><line x1='4' y1='62' x2='76' y2='62' stroke='%23c89040' stroke-width='1.5' opacity='0.4'/></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;1,300;1,400&family=Raleway:wght@200;300;400&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #0d0a06;
+  font-family: 'Raleway', sans-serif;
+}
+
+#canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Window frame vignette */
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(ellipse 85% 80% at 50% 48%,
+    transparent 60%,
+    rgba(6, 4, 1, 0.55) 85%,
+    rgba(3, 2, 0, 0.85) 100%
+  );
+}
+
+/* Amber flash on rail joint */
+.flash {
+  position: fixed;
+  inset: 0;
+  background: rgba(240, 170, 50, 0);
+  z-index: 4;
+  pointer-events: none;
+  transition: background 0.06s;
+}
+.flash.on { background: rgba(240, 170, 50, 0.07); }
+
+/* ── TITLE (top, unobtrusive) ── */
+.title-wrap {
+  position: fixed;
+  z-index: 10;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+}
+.title {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 1.25rem;
+  color: rgba(255, 220, 145, 0.55);
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 35px rgba(220, 150, 40, 0.3);
+  line-height: 1;
+}
+
+/* ── BOTTOM BAR ── */
+.bar {
+  position: fixed;
+  z-index: 10;
+  bottom: 0;
+  left: 0; right: 0;
+  padding: 12px 18px 18px;
+  background: linear-gradient(to top, rgba(8,5,1,0.88) 0%, rgba(8,5,1,0.0) 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* track buttons row */
+.intensities {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.int-btn {
+  flex: 1;
+  padding: 7px 4px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(210, 155, 55, 0.12);
+  border-radius: 20px;
+  color: rgba(220, 175, 90, 0.38);
+  font-family: 'Raleway', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.int-btn:hover {
+  background: rgba(210, 155, 55, 0.07);
+  border-color: rgba(210, 155, 55, 0.22);
+  color: rgba(255, 220, 145, 0.75);
+}
+.int-btn.active {
+  background: rgba(210, 155, 55, 0.1);
+  border-color: rgba(210, 155, 55, 0.38);
+  color: rgba(255, 225, 155, 0.95);
+  box-shadow: 0 0 14px rgba(200, 130, 30, 0.1);
+}
+
+/* controls row: play + volume */
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.play-btn {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(210, 155, 55, 0.08);
+  border: 1px solid rgba(210, 155, 55, 0.26);
+  color: rgba(255, 220, 145, 0.85);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 22px rgba(200, 130, 30, 0.07);
+  user-select: none;
+}
+.play-btn:hover {
+  background: rgba(210, 155, 55, 0.16);
+  box-shadow: 0 0 38px rgba(200, 130, 30, 0.2);
+  transform: scale(1.06);
+}
+.play-btn.playing {
+  background: rgba(210, 155, 55, 0.13);
+  border-color: rgba(210, 155, 55, 0.42);
+  box-shadow: 0 0 44px rgba(200, 130, 30, 0.22);
+}
+
+.vol-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.vol-icon {
+  font-size: 0.78rem;
+  color: rgba(185, 130, 50, 0.35);
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 2px;
+  background: rgba(210, 155, 55, 0.18);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(240, 195, 90, 0.85);
+  box-shadow: 0 0 8px rgba(220, 155, 50, 0.55);
+  cursor: pointer;
+}
+input[type=range]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(240, 195, 90, 0.85);
+  border: none;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<div class="flash" id="flash"></div>
+<canvas id="canvas"></canvas>
+<div class="vignette"></div>
+
+<div class="title-wrap">
+  <div class="title">ночной экспресс</div>
+</div>
+
+<div class="bar">
+  <div class="intensities">
+    <button class="int-btn active" data-track="Railway.mp3" onclick="setTrack(this)">railway</button>
+    <button class="int-btn" data-track="Overnight.mp3" onclick="setTrack(this)">overnight</button>
+    <button class="int-btn" data-track="Calming.mp3" onclick="setTrack(this)">calming</button>
+  </div>
+  <div class="controls-row">
+    <button class="play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+    <div class="vol-row">
+      <span class="vol-icon">○</span>
+      <input type="range" id="vol" min="0" max="100" value="65" oninput="setVol(this.value)">
+      <span class="vol-icon">◉</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+resize();
+addEventListener('resize', () => { resize(); buildScene(); });
+
+// ── STARS ──────────────────────────────────────────────────────
+const STARS = Array.from({length: 130}, () => ({
+  x: Math.random(),
+  y: Math.random() * 0.52,
+  r: 0.25 + Math.random() * 0.9,
+  baseOp: 0.15 + Math.random() * 0.6,
+  phase: Math.random() * Math.PI * 2,
+  speed: 0.004 + Math.random() * 0.012,
+}));
+
+// ── TELEGRAPH POLES ────────────────────────────────────────────
+const POLE_SPACING = 120;
+class Pole {
+  constructor(x) { this.x = x; }
+  update(dt) { this.x -= dt * scrollSpeed * 1.8; }
+  recycled() { return this.x < -30; }
+  draw() {
+    const groundY = H * 0.71;
+    const topY    = H * 0.36;
+    const crossY  = topY + 9;
+    ctx.strokeStyle = 'rgba(22, 14, 5, 0.95)';
+    ctx.lineWidth = 2.8;
+    ctx.beginPath(); ctx.moveTo(this.x, groundY); ctx.lineTo(this.x, topY); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(this.x - 15, crossY); ctx.lineTo(this.x + 15, crossY); ctx.stroke();
+    ctx.fillStyle = 'rgba(30, 18, 6, 0.85)';
+    ctx.beginPath(); ctx.arc(this.x - 9, crossY, 2.2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(this.x + 9, crossY, 2.2, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// ── TREES (distant treeline, slow parallax) ────────────────────
+class TreeClump {
+  constructor(x) {
+    this.x = x;
+    this.trunks = Array.from({length: 3 + Math.floor(Math.random()*4)}, () => ({
+      dx: (Math.random()-0.5)*50,
+      h:  55 + Math.random()*70,
+      w:  7  + Math.random()*13,
+    }));
+  }
+  update(dt) { this.x -= dt * scrollSpeed * 0.8; }
+  recycled() { return this.x < -80; }
+  draw() {
+    const base = H * 0.645;
+    ctx.fillStyle = 'rgba(10, 6, 2, 0.93)';
+    for (const t of this.trunks) {
+      ctx.beginPath();
+      ctx.moveTo(this.x+t.dx, base);
+      ctx.lineTo(this.x+t.dx - t.w/2, base - t.h);
+      ctx.lineTo(this.x+t.dx + t.w/2, base - t.h);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+}
+
+// ── DISTANT STATION LIGHTS ─────────────────────────────────────
+class StationGlow {
+  constructor(x) {
+    this.x = x;
+    this.y = H * (0.42 + Math.random()*0.1);
+    this.size = 35 + Math.random()*55;
+    this.op   = 0.28 + Math.random()*0.35;
+    this.winCount = 2 + Math.floor(Math.random()*4);
+  }
+  update(dt) { this.x -= dt * scrollSpeed * 0.55; }
+  recycled() { return this.x < -this.size * 3; }
+  draw() {
+    // Three overlapping soft layers — no hard clip boundary
+    const layers = [
+      { rx: this.size * 5,   ry: this.size * 2.8, op: this.op * 0.18 },
+      { rx: this.size * 2.8, ry: this.size * 1.6, op: this.op * 0.32 },
+      { rx: this.size * 1.3, ry: this.size * 0.8, op: this.op * 0.42 },
+    ];
+    for (const l of layers) {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.scale(1, l.ry / l.rx);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, l.rx);
+      g.addColorStop(0,    `rgba(255, 210, 100, ${l.op})`);
+      g.addColorStop(0.35, `rgba(230, 155, 40,  ${l.op * 0.55})`);
+      g.addColorStop(0.65, `rgba(180, 100, 20,  ${l.op * 0.2})`);
+      g.addColorStop(1,    `rgba(140, 70,  10,  0)`);
+      ctx.fillStyle = g;
+      const hw = l.rx, hh = l.rx * (l.rx / l.ry);
+      ctx.fillRect(-hw, -hh, hw * 2, hh * 2);
+      ctx.restore();
+    }
+    // windows with per-window soft halo
+    const ww = 8, wh = 11, gap = 13;
+    const totalW = this.winCount * (ww + gap) - gap;
+    for (let i = 0; i < this.winCount; i++) {
+      const wx = this.x - totalW/2 + i*(ww+gap);
+      const wg = ctx.createRadialGradient(wx+ww/2, this.y, 0, wx+ww/2, this.y, ww*3.5);
+      wg.addColorStop(0,   `rgba(255, 230, 150, ${this.op * 0.65})`);
+      wg.addColorStop(0.5, `rgba(255, 200, 90,  ${this.op * 0.22})`);
+      wg.addColorStop(1,   `rgba(255, 180, 50,  0)`);
+      ctx.fillStyle = wg;
+      ctx.fillRect(wx - ww*2.5, this.y - wh*2, ww*6, wh*4);
+      ctx.fillStyle = `rgba(255, 220, 130, ${this.op * 0.9})`;
+      ctx.fillRect(wx, this.y - wh/2, ww, wh);
+    }
+  }
+}
+
+// ── SCENE POOLS ───────────────────────────────────────────────
+let poles = [], trees = [], stations = [];
+function buildScene() {
+  poles    = [];
+  trees    = [];
+  stations = [];
+  for (let x = -20; x < W + 60; x += POLE_SPACING + Math.random()*30)
+    poles.push(new Pole(x));
+  for (let x = -80; x < W + 150; x += 110 + Math.random()*80)
+    trees.push(new TreeClump(x));
+  for (let x = 200; x < W + 400; x += 380 + Math.random()*320)
+    stations.push(new StationGlow(x));
+}
+buildScene();
+
+// ── RAIL JOINT PHYSICS ─────────────────────────────────────────
+let lurchY = 0, lurchVel = 0;
+function kickLurch() {
+  lurchVel = 5 + Math.random()*4;
+}
+
+// ── CONTINUOUS SWAY ────────────────────────────────────────────
+// Sawtooth-shaped periodic jolts for the chuh-chuh rhythm,
+// blended with a slow roll for the side-to-side sway
+const BEAT_INTERVAL = 550; // ms between rail joints in the base rhythm
+
+function getSway(ts) {
+  // Slow lateral roll
+  const roll = Math.sin(ts * 0.00055) * 3.5
+             + Math.sin(ts * 0.00130) * 1.2;
+  // Periodic vertical bump — sawtooth that resets on beat
+  const phase = (ts % BEAT_INTERVAL) / BEAT_INTERVAL; // 0..1
+  // smooth decay: sharp rise at beat, exponential decay
+  const bump = Math.exp(-phase * 5) * 4.5
+             + Math.sin(phase * Math.PI * 2) * 1.2;
+  // Small micro-wobble
+  const micro = Math.sin(ts * 0.00420) * 0.6;
+  return { x: roll, y: bump + micro };
+}
+
+// ── SCROLL STATE ──────────────────────────────────────────────
+let scrollSpeed = 1.0; // multiplier
+let speedTimer  = 0;
+
+// ── DRAW HELPERS ──────────────────────────────────────────────
+function drawBg() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0,    '#040208');
+  g.addColorStop(0.45, '#0d0906');
+  g.addColorStop(0.72, '#120c04');
+  g.addColorStop(1,    '#080502');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawMoonGlow() {
+  // Subtle moon — a soft amber tint on the horizon, no hard disc
+  const g = ctx.createRadialGradient(W*0.78, H*0.14, 0, W*0.78, H*0.14, H*0.38);
+  g.addColorStop(0,   'rgba(240, 200, 100, 0.06)');
+  g.addColorStop(0.5, 'rgba(180, 140, 60, 0.025)');
+  g.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawStars(t) {
+  for (const s of STARS) {
+    s.phase += s.speed;
+    const op = s.baseOp * (0.72 + 0.28 * Math.sin(s.phase));
+    ctx.beginPath();
+    ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(255, 245, 210, ${op})`;
+    ctx.fill();
+  }
+}
+
+function drawHills() {
+  ctx.beginPath();
+  ctx.moveTo(-20, H);
+  for (let x = -20; x <= W + 20; x += 35) {
+    const y = H*0.57
+      + Math.sin(x*0.0095 + 0.8) * H*0.045
+      + Math.sin(x*0.005)        * H*0.03;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W + 20, H); ctx.closePath();
+  ctx.fillStyle = '#07050b';
+  ctx.fill();
+}
+
+function drawGround() {
+  const gy = H*0.71;
+  const g = ctx.createLinearGradient(0, gy, 0, H);
+  g.addColorStop(0, '#120d05');
+  g.addColorStop(1, '#060401');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, gy, W, H - gy);
+  // Rail gleam
+  [[H*0.748, 0.16], [H*0.758, 0.09]].forEach(([y, op]) => {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y);
+    ctx.strokeStyle = `rgba(200, 155, 60, ${op})`;
+    ctx.lineWidth = 1; ctx.stroke();
+  });
+}
+
+function drawWires() {
+  // Draw wires between consecutive poles
+  const sorted = [...poles].sort((a, b) => a.x - b.x);
+  ctx.lineWidth = 0.85;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i], b = sorted[i+1];
+    const ty = H*0.36 + 9;
+    [[-9, -9], [9, 9]].forEach(([da, db]) => {
+      ctx.beginPath();
+      ctx.moveTo(a.x + da, ty);
+      ctx.quadraticCurveTo((a.x + b.x)/2, ty + 10, b.x + db, ty);
+      ctx.strokeStyle = 'rgba(18, 11, 4, 0.75)';
+      ctx.stroke();
+    });
+  }
+}
+
+// Window condensation — tiny amber-tinted drops barely visible
+const wDrops = Array.from({length: 15}, () => ({
+  x: Math.random() * 0.9 + 0.05,
+  y: Math.random() * 0.75 + 0.05,
+  spd: 0.00008 + Math.random() * 0.00022,
+  op: 0.025 + Math.random() * 0.055,
+  r: 1.1 + Math.random() * 1.8,
+}));
+
+function drawWindowDrops() {
+  for (const d of wDrops) {
+    d.y += d.spd;
+    if (d.y > 0.94) { d.y = 0.06; d.x = Math.random()*0.88+0.06; }
+    ctx.beginPath();
+    ctx.arc(d.x*W, d.y*H, d.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(210, 180, 110, ${d.op})`;
+    ctx.fill();
+    // trail
+    ctx.beginPath();
+    ctx.moveTo(d.x*W, d.y*H);
+    ctx.lineTo(d.x*W, (d.y-0.028)*H);
+    ctx.strokeStyle = `rgba(210, 180, 110, ${d.op*0.35})`;
+    ctx.lineWidth = d.r*0.75;
+    ctx.stroke();
+  }
+}
+
+// ── ANIMATE ───────────────────────────────────────────────────
+let last = 0;
+function animate(ts) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((ts - last) / 16.67, 3);
+  last = ts;
+
+  // Lurch spring
+  lurchVel += (-lurchY) * 0.32;
+  lurchVel *= 0.55;
+  lurchY   += lurchVel;
+
+  // Speed decay
+  if (scrollSpeed > 1) {
+    scrollSpeed = Math.max(1, scrollSpeed - dt * 0.1);
+  }
+
+  const sway = getSway(ts);
+
+  // Background drawn OUTSIDE transform — fills full canvas always
+  drawBg();
+
+  ctx.save();
+  ctx.translate(sway.x, lurchY + sway.y);
+
+  drawMoonGlow();
+  drawStars(ts);
+  stations.forEach(s => { s.update(dt); s.draw(); });
+  trees.forEach(t => { t.update(dt); t.draw(); });
+  drawHills();
+  drawWires();
+  poles.forEach(p => { p.update(dt); p.draw(); });
+  drawGround();
+
+  ctx.restore();
+  drawWindowDrops();
+
+  // Recycle & spawn
+  ['poles','trees','stations'].forEach(name => {
+    const arr = name === 'poles' ? poles : name === 'trees' ? trees : stations;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      if (arr[i].recycled()) {
+        if (name === 'poles')    arr[i] = new Pole(W + 30 + Math.random()*POLE_SPACING);
+        if (name === 'trees')    arr[i] = new TreeClump(W + 80 + Math.random()*100);
+        if (name === 'stations') arr[i] = new StationGlow(W + 200 + Math.random()*350);
+      }
+    }
+  });
+}
+requestAnimationFrame(animate);
+
+// ── RAIL JOINT ────────────────────────────────────────────────
+function doJoint() {
+  kickLurch();
+  scrollSpeed = 2.2;
+  const fl = document.getElementById('flash');
+  fl.classList.add('on');
+  setTimeout(() => fl.classList.remove('on'), 65);
+  setTimeout(() => { fl.classList.add('on'); setTimeout(() => fl.classList.remove('on'), 45); }, 120);
+}
+
+document.addEventListener('click', e => {
+  if (e.target.closest('.panel')) return;
+  doJoint();
+});
+
+setInterval(() => {
+  if (playing && Math.random() < 0.15) doJoint();
+}, 4500);
+
+// ── AUDIO ─────────────────────────────────────────────────────
+let audio = null, playing = false;
+let currentTrack = 'Railway.mp3';
+
+function initAudio(track) {
+  if (audio) { audio.pause(); audio.src = ''; }
+  audio = new Audio(track);
+  audio.loop = true;
+  audio.volume = document.getElementById('vol').value / 100;
+}
+function togglePlay() {
+  if (!audio) initAudio(currentTrack);
+  if (playing) { audio.pause(); playing = false; }
+  else { audio.play().catch(()=>{}); playing = true; }
+  const btn = document.getElementById('playBtn');
+  btn.textContent = playing ? '⏸' : '▶';
+  btn.classList.toggle('playing', playing);
+}
+function setTrack(btn) {
+  document.querySelectorAll('.int-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTrack = btn.dataset.track;
+  const was = playing;
+  if (audio) { audio.pause(); audio.src = ''; }
+  audio = new Audio(currentTrack);
+  audio.loop = true;
+  audio.volume = document.getElementById('vol').value / 100;
+  if (was) audio.play().catch(()=>{});
+}
+function setVol(v) { if (audio) audio.volume = v / 100; }
+</script>
+</body>
+</html>
