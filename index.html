@@ -357,7 +357,7 @@ function kickLurch() {
 // ── CONTINUOUS SWAY ────────────────────────────────────────────
 // Sawtooth-shaped periodic jolts for the chuh-chuh rhythm,
 // blended with a slow roll for the side-to-side sway
-const BEAT_INTERVAL = 550; // ms between rail joints in the base rhythm
+const BEAT_INTERVAL = 720; // ms — matched to Railway.mp3
 
 function getSway(ts) {
   // Slow lateral roll
@@ -537,10 +537,6 @@ requestAnimationFrame(animate);
 function doJoint() {
   kickLurch();
   scrollSpeed = 2.2;
-  const fl = document.getElementById('flash');
-  fl.classList.add('on');
-  setTimeout(() => fl.classList.remove('on'), 65);
-  setTimeout(() => { fl.classList.add('on'); setTimeout(() => fl.classList.remove('on'), 45); }, 120);
 }
 
 document.addEventListener('click', e => {
